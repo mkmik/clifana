@@ -16,11 +16,12 @@ GRAFANA_TOKEN="${GRAFANA_TOKEN:-}"
 snapshot() {
   local name="$1"
   local expires="$2"
+  local filename="$3"
 
   json=$(mktemp)
   tmps+=("${json}")
 
-  jq "{ \"dashboard\": ., \"expires\": ${expires}, \"name\": \"${name}\" }" < "demo.json" > "${json}"
+  jq "{ \"dashboard\": ., \"expires\": ${expires}, \"name\": \"${name}\" }" < "${filename}" > "${json}"
 
   apicall "@${json}" \
     | jq -r ".url"
