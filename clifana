@@ -1,4 +1,16 @@
 #!/bin/bash
+#
+# Clifana is a CLI for the Grafana API.
+#
+# (Not to be confused with grafana-cli which is a CLI for the grafana server)
+#
+# Currently the only supported command is:
+#
+#    clifana snapshot dashboard.json
+#
+# which is useful when you want to quickly preview a dashboard-as-code.
+# It's useful when used in combination with some templating system like
+# https://github.com/grafana/grafonnet-lib
 
 set -eu -o pipefail
 
