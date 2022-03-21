@@ -1,0 +1,109 @@
+#!/bin/bash
+
+set -eu -o pipefail
+
+usage() {
+  echo "Usage: $0 [(-u|--grafana-url) <url>] [(-t|--grafana-token) <token>] [(-n|--name) <snapshot name>] [(-e|--expires) <seconds>] snapshot dashboard.json"
+  echo "(also, envs: GRAFANA_URL, GRAFANA_TOKEN)"
+  exit 1
+}
+
+GRAFANA_URL="${GRAFANA_URL:-}"
+GRAFANA_TOKEN="${GRAFANA_TOKEN:-}"
+
+# Call the "snapshot" grafana API (see https://grafana.com/docs/grafana/latest/http_api/snapshot/)
+# and print the snapshot url to stdout
+snapshot() {
+  local name="$1"
+  local expires="$2"
+
+  json=$(mktemp)
+  tmps+=("${json}")
+
+  jq "{ \"dashboard\": ., \"expires\": ${expires}, \"name\": \"${name}\" }" < "demo.json" > "${json}"
+
+  apicall "@${json}" \
+    | jq -r ".url"
+}
+
+curl() {
+  CURL=(curl -fsSL)
+  if [[ -n ${GRAFANA_TOKEN} ]]; then
+    CURL+=(-H "Authorization: Bearer ${GRAFANA_TOKEN}")
+  fi
+
+  command "${CURL[@]}" "$@"
+}
+
+apicall() {
+  curl -X POST \
+       -H 'Content-type: application/json' \
+       -H 'Accept: application/json'\
+       "${GRAFANA_URL}/api/snapshots" \
+       --data-binary "$1"
+}
+
+declare -a tmps
+cleanup() {
+  # https://stackoverflow.com/questions/7577052/bash-empty-array-expansion-with-set-u
+  rm -rf ${tmps[@]+"${tmps[@]}"}
+}
+trap cleanup EXIT
+
+main() {
+  positional_args=()
+
+  local name="clifana"
+  local expires=300
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+
+    case $key in
+      -u|--grafana-url)
+        GRAFANA_URL="$2"
+        shift 2
+        ;;
+      -t|--token)
+        GRAFANA_TOKEN="$2"
+        shift 2
+        ;;
+      -n|--name)
+        name="$2"
+        shift 2
+        ;;
+      -e|--expires)
+        expires="$2"
+        shift 2
+        ;;
+      --*|-*)
+        echo "unknown option $1"
+        usage
+        ;;
+      *)
+        positional_args+=("$1") # save positional arg
+        shift
+        ;;
+    esac
+  done
+
+  if [[ ${#positional_args[@]} -gt 0 ]]; then
+    set -- "${positional_args[@]}"
+  fi
+
+  case "${1:-}" in
+    snapshot)
+      if [[ $# -lt 2 ]]; then
+        echo "missing dashboard filename"
+        usage
+      fi
+      snapshot "${name}" "${expires}" "$2"
+      ;;
+    *)
+      echo "Unknown command '${1:-}'"
+      usage
+      ;;
+  esac
+}
+
+main "$@"
